@@ -52,6 +52,32 @@ Sliver hexToSliver(const std::string &hex) {
   return result;
 }
 
+std::string hexToString(const std::string &hex) {
+  if (hex.empty()) {
+    return std::string();
+  } else if (hex.size() % 2) {
+    throw std::invalid_argument{"Invalid hex string: " + hex};
+  }
+  const auto valid_chars = "0123456789abcdefABCDEF";
+  auto start = std::string::size_type{0};
+  if (hex.find("0x") == 0 || hex.find("0X") == 0) {
+    start += 2;
+    if (hex.size() > 2 && hex.find_first_not_of(valid_chars, 2) != std::string::npos) {
+      throw std::invalid_argument{"Invalid hex string: " + hex};
+    }
+  } else if (hex.find_first_not_of(valid_chars) != std::string::npos) {
+    throw std::invalid_argument{"Invalid hex string: " + hex};
+  }
+
+  auto result = std::string{};
+  result.reserve(hex.size() / 2);
+  for (auto i = start; i < hex.size(); i += 2) {
+    const auto byte = hex.substr(i, 2);
+    result.push_back(std::stoi(byte, nullptr, 16));
+  }
+  return result;
+}
+
 std::string bufferToHex(const char *data, size_t size) {
   auto ss = std::stringstream{};
   hexPrint(ss, data, size);

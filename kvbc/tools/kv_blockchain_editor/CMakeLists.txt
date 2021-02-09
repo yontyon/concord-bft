@@ -1,0 +1,8 @@
+add_library(lib_kv_blockchain_editor INTERFACE)
+target_link_libraries(lib_kv_blockchain_editor INTERFACE)
+target_include_directories(lib_kv_blockchain_editor INTERFACE include)
+
+if(BUILD_ROCKSDB_STORAGE)
+add_executable(kv_blockchain_editor kv_blockchain_editor.cpp)
+target_link_libraries(kv_blockchain_editor PUBLIC lib_kv_blockchain_editor util kvbc stdc++fs)
+endif()

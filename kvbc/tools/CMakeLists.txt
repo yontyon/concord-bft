@@ -1,1 +1,2 @@
 add_subdirectory(sparse_merkle_db)
+add_subdirectory(kv_blockchain_editor)

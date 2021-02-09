@@ -27,6 +27,8 @@ inline std::ostream &operator<<(std::ostream &s, const HexPrintBuffer p) {
 // Converts a hex string into a byte buffer. Handles leading 0x characters (if present).
 Sliver hexToSliver(const std::string &hex);
 
+std::string hexToString(const std::string &hex);
+
 // Converts a buffer into a hex string.
 std::string bufferToHex(const char *data, size_t size);
 std::string bufferToHex(const std::uint8_t *data, size_t size);
