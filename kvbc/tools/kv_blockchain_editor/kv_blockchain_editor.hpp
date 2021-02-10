@@ -23,7 +23,6 @@
 #include <variant>
 #include <vector>
 
-
 #if __has_include(<filesystem>)
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -34,25 +33,25 @@ namespace fs = std::experimental::filesystem;
 #error "Missing filesystem support"
 #endif
 namespace concord::kvbc::tools::kv_blockchain_editor {
-  struct BlockVisitor {
-    const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::BlockMerkleInput& updates) {
-      return updates.kv;
+struct BlockVisitor {
+  const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::BlockMerkleInput& updates) {
+    return updates.kv;
+  }
+  const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::VersionedInput& updates) {
+    std::map<std::string, std::string> ret;
+    for (auto& update : updates.kv) {
+      ret.emplace(update.first, update.second.data);
     }
-    const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::VersionedInput& updates) {
-      std::map<std::string, std::string> ret;
-      for (auto& update : updates.kv) {
-        ret.emplace(update.first, update.second.data);
-      }
-      return ret;
+    return ret;
+  }
+  const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::ImmutableInput& updates) {
+    std::map<std::string, std::string> ret;
+    for (auto& update : updates.kv) {
+      ret.emplace(update.first, update.second.data);
     }
-    const std::map<std::string, std::string> operator()(const concord::kvbc::categorization::ImmutableInput& updates) {
-      std::map<std::string, std::string> ret;
-      for (auto& update : updates.kv) {
-        ret.emplace(update.first, update.second.data);
-      }
-      return ret;
-    }
-  };
+    return ret;
+  }
+};
 
 struct ValueVisitor {
   std::tuple<BlockId, std::string> operator()(const concord::kvbc::categorization::MerkleValue& val) {
@@ -66,59 +65,59 @@ struct ValueVisitor {
   }
 };
 
-  using namespace std::string_literals;
-  using concordUtils::toJson;
+using namespace std::string_literals;
+using concordUtils::toJson;
 
-  inline const auto kToolName = "kv_blockchain_editor"s;
+inline const auto kToolName = "kv_blockchain_editor"s;
 
-  template <typename Tag>
-  struct Arguments {
-    std::vector<std::string> values;
-  };
+template <typename Tag>
+struct Arguments {
+  std::vector<std::string> values;
+};
 
-  struct CommandLineArgumentsTag {};
-  struct CommandArgumentsTag {};
+struct CommandLineArgumentsTag {};
+struct CommandArgumentsTag {};
 
-  using CommandArguments = Arguments<CommandArgumentsTag>;
-  using CommandLineArguments = Arguments<CommandArgumentsTag>;
+using CommandArguments = Arguments<CommandArgumentsTag>;
+using CommandLineArguments = Arguments<CommandArgumentsTag>;
 
-  std::shared_ptr<concord::storage::rocksdb::NativeClient> native_client;
-  std::unique_ptr<concord::kvbc::categorization::KeyValueBlockchain> bc_;
+std::shared_ptr<concord::storage::rocksdb::NativeClient> native_client;
+std::unique_ptr<concord::kvbc::categorization::KeyValueBlockchain> bc_;
 
-  void init_bc(const std::string& rocksdb_path) {
-    native_client = concord::storage::rocksdb::NativeClient::newClient(
-        rocksdb_path, true, ::concord::storage::rocksdb::NativeClient::DefaultOptions{});
-    bc_ = std::make_unique<concord::kvbc::categorization::KeyValueBlockchain>(native_client, false);
+void init_bc(const std::string& rocksdb_path) {
+  native_client = concord::storage::rocksdb::NativeClient::newClient(
+      rocksdb_path, true, ::concord::storage::rocksdb::NativeClient::DefaultOptions{});
+  bc_ = std::make_unique<concord::kvbc::categorization::KeyValueBlockchain>(native_client, false);
+}
+auto toBlockId(const std::string& s) {
+  if (s.find_first_not_of("0123456789") != std::string::npos) {
+    throw std::invalid_argument{"Invalid BLOCK-ID: " + s};
   }
-  auto toBlockId(const std::string &s) {
-    if (s.find_first_not_of("0123456789") != std::string::npos) {
-      throw std::invalid_argument{"Invalid BLOCK-ID: " + s};
-    }
-    return kvbc::BlockId{std::stoull(s, nullptr)};
+  return kvbc::BlockId{std::stoull(s, nullptr)};
+}
+
+struct GetGenesisBlockID {
+  bool read_only = true;
+  std::string description() const {
+    return "getGenesisBlockID\n"
+           "  Returns the genesis block ID.";
+  }
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments&) const {
+    return toJson("genesisBlockID", bc.getGenesisBlockId());
+  }
+};
+
+struct GetLastBlockID {
+  bool read_only = true;
+  std::string description() const {
+    return "getLastBlockID\n"
+           " Returns the last block ID";
   }
 
-  struct GetGenesisBlockID {
-    bool read_only = true;
-    std::string description() const {
-      return "getGenesisBlockID\n"
-             "  Returns the genesis block ID.";
-    }
-    std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &) const {
-      return toJson("genesisBlockID", bc.getGenesisBlockId());
-    }
-  };
-
-  struct GetLastBlockID {
-    bool read_only = true;
-    std::string description() const {
-      return "getLastBlockID\n"
-             " Returns the last block ID";
-    }
-
-    std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &) const {
-      return toJson("lastBlockID", bc.getLastReachableBlockId());
-    }
-  };
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments&) const {
+    return toJson("lastBlockID", bc.getLastReachableBlockId());
+  }
+};
 
 struct GetRawBlock {
   bool read_only = true;
@@ -127,7 +126,7 @@ struct GetRawBlock {
            "  Returns a serialized raw block (encoded in hex).";
   }
 
-  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &args) const {
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
     if (args.values.empty()) {
       throw std::invalid_argument{"Missing BLOCK-ID argument"};
     }
@@ -144,7 +143,7 @@ struct GetRawBlockRange {
            "  Returns a list of serialized raw blocks (encoded in hex) in the [BLOCK-ID-START, BLOCK-ID-END) range.";
   }
 
-  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &args) const {
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
     if (args.values.size() < 2) {
       throw std::invalid_argument{"Missing or invalid block range"};
     }
@@ -161,7 +160,8 @@ struct GetRawBlockRange {
     for (auto i = first; i <= last; ++i) {
       const auto raw_block = bc.getRawBlock(i);
       auto raw_block_data = concord::kvbc::categorization::RawBlock::serialize(raw_block.value());
-      raw_blocks.emplace_back("rawBlock" + std::to_string(i), concordUtils::bufferToHex(raw_block_data.data(), raw_block_data.size()));
+      raw_blocks.emplace_back("rawBlock" + std::to_string(i),
+                              concordUtils::bufferToHex(raw_block_data.data(), raw_block_data.size()));
     }
     return toJson(raw_blocks);
   }
@@ -174,7 +174,7 @@ struct GetBlockInfo {
            "  Returns information about the requested block (excluding its key-values).";
   }
 
-  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &args) const {
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
     if (args.values.empty()) {
       throw std::invalid_argument{"Missing BLOCK-ID argument"};
     }
@@ -198,13 +198,13 @@ struct GetBlockKeyValues {
            "  Returns the block's key-values.";
   }
 
-  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &args) const {
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
     if (args.values.size() < 2) {
       throw std::invalid_argument{"Missing BLOCK-ID argument or Category-ID argument"};
     }
     std::map<std::string, std::string> updates;
     auto block_updates = bc.getBlockUpdates(toBlockId(args.values.front()));
-    for (uint32_t i = 1 ; i < args.values.size() ; i++) {
+    for (uint32_t i = 1; i < args.values.size(); i++) {
       auto cat_id = args.values[i];
       auto cat_updates = block_updates.value().categoryUpdates(cat_id).value().get();
       auto updates_map = std::visit(BlockVisitor(), cat_updates);
@@ -223,7 +223,7 @@ struct GetValue {
            "  earlier version, its value at the earlier version will be returned.";
   }
 
-  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments &args) const {
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
     if (args.values.size() < 2) {
       throw std::invalid_argument{"Missing HEX-KEY argument or CATEGORY-ID argument"};
     }
@@ -260,8 +260,8 @@ inline std::string usage() {
   auto ret = "Usage: " + kToolName + " PATH-TO-DB COMMAND [ARGUMENTS]...\n\n";
   ret += "Supported commands:\n\n";
 
-  for (const auto &kv : commands_map) {
-    ret += std::visit([](const auto &command) { return command.description(); }, kv.second);
+  for (const auto& kv : commands_map) {
+    ret += std::visit([](const auto& command) { return command.description(); }, kv.second);
     ret += "\n\n";
   }
 
@@ -280,7 +280,7 @@ inline std::string usage() {
 
 inline constexpr auto kMinCmdLineArguments = 3ull;
 
-inline CommandLineArguments command_line_arguments(int argc, char *argv[]) {
+inline CommandLineArguments command_line_arguments(int argc, char* argv[]) {
   auto cmd_line_args = CommandLineArguments{};
   for (auto i = 0; i < argc; ++i) {
     cmd_line_args.values.push_back(argv[i]);
@@ -288,7 +288,7 @@ inline CommandLineArguments command_line_arguments(int argc, char *argv[]) {
   return cmd_line_args;
 }
 
-inline CommandArguments command_arguments(const CommandLineArguments &cmd_line_args) {
+inline CommandArguments command_arguments(const CommandLineArguments& cmd_line_args) {
   auto cmd_args = CommandArguments{};
   for (auto i = kMinCmdLineArguments; i < cmd_line_args.values.size(); ++i) {
     cmd_args.values.push_back(cmd_line_args.values[i]);
@@ -296,7 +296,7 @@ inline CommandArguments command_arguments(const CommandLineArguments &cmd_line_a
   return cmd_args;
 }
 
-inline int run(const CommandLineArguments &cmd_line_args, std::ostream &out, std::ostream &err) {
+inline int run(const CommandLineArguments& cmd_line_args, std::ostream& out, std::ostream& err) {
   if (cmd_line_args.values.size() < kMinCmdLineArguments) {
     err << usage();
     return EXIT_FAILURE;
@@ -310,16 +310,15 @@ inline int run(const CommandLineArguments &cmd_line_args, std::ostream &out, std
 
   try {
     init_bc(cmd_line_args.values[1]);
-    const auto output =
-        std::visit([&](const auto &command) -> std::string { return command.execute(*bc_, command_arguments(cmd_line_args)); },
-                   cmd_it->second);
+    const auto output = std::visit(
+        [&](const auto& command) -> std::string { return command.execute(*bc_, command_arguments(cmd_line_args)); },
+        cmd_it->second);
     out << output << std::endl;
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     err << "Failed to execute command [" << cmd_it->first << "], reason: " << e.what() << std::endl;
     return EXIT_FAILURE;
   }
   return EXIT_SUCCESS;
 }
 
-}
-
+}  // namespace concord::kvbc::tools::kv_blockchain_editor
