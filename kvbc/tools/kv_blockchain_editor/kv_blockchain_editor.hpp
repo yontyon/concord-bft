@@ -179,7 +179,11 @@ struct GetBlockInfo {
       throw std::invalid_argument{"Missing BLOCK-ID argument"};
     }
     const auto raw_block = bc.getRawBlock(toBlockId(args.values.front()));
-
+    std::string categories_info = "[";
+    for (auto& [cat_id, _] : raw_block.value().data.updates.kv) {
+      categories_info += "\"" + cat_id + "\",";
+    }
+    categories_info[categories_info.size() - 1] = ']';
     const auto state_hash = raw_block.value().data.category_root_hash;
     const auto parent_digest = raw_block.value().data.parent_digest;
     const auto key_values = raw_block.value().data.updates.kv;
@@ -189,12 +193,14 @@ struct GetBlockInfo {
     }
     json.emplace("parentBlockDigest", concordUtils::bufferToHex(parent_digest.data(), parent_digest.size()));
     json.emplace("keyValueCount", std::to_string(key_values.size()));
+    json.emplace("categorizes", categories_info);
     return toJson(json);
   }
 };
+
 struct GetBlockKeyValues {
   std::string description() const {
-    return "getBlockKeyValues BLOCK-ID category_1 category_2 ... category_n\n"
+    return "getBlockKeyValues BLOCK-ID CATEGORY_1 CATEGORY_2 ... CATEGORY_N\n"
            "  Returns the block's key-values.";
   }
 
