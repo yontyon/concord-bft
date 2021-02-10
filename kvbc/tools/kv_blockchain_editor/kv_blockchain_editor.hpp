@@ -249,13 +249,38 @@ struct GetValue {
   }
 };
 
+struct GetCategoryValues {
+  std::string description() const {
+    return "GetCategoryValues CATEGORY-ID [BLOCK-VERSION]\n"
+           "  Gets a value by category id and (optionally) a block version.\n"
+           "  If no BLOCK-VERSION is passed, the value for the latest one will be returned\n"
+           "  (if existing). If the key doesn't exist at BLOCK-VERSION, but exists at an\n"
+           "  earlier version, its value at the earlier version will be returned.";
+  }
+
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
+    if (args.values.empty()) {
+      throw std::invalid_argument{"Missing CATEGORY-ID argument"};
+    }
+    const auto cat_id = args.values.front();
+    auto requested_block_version = bc.getLastReachableBlockId();
+    if (args.values.size() > 1) {
+      requested_block_version = toBlockId(args.values[1]);
+    }
+    const auto updates = bc.getBlockUpdates(requested_block_version).value().categoryUpdates(cat_id).value().get();
+    auto updates_map = std::visit(BlockVisitor(), updates);
+    return toJson(updates_map);
+  }
+};
+
 using Command = std::variant<GetGenesisBlockID,
                              GetLastBlockID,
                              GetRawBlock,
                              GetRawBlockRange,
                              GetBlockInfo,
                              GetBlockKeyValues,
-                             GetValue>;
+                             GetValue,
+                             GetCategoryValues>;
 inline const auto commands_map = std::map<std::string, Command>{
     std::make_pair("getGenesisBlockID", GetGenesisBlockID{}),
     std::make_pair("getLastBlockID", GetLastBlockID{}),
@@ -264,6 +289,7 @@ inline const auto commands_map = std::map<std::string, Command>{
     std::make_pair("getBlockInfo", GetBlockInfo{}),
     std::make_pair("getBlockKeyValues", GetBlockKeyValues{}),
     std::make_pair("getValue", GetValue{}),
+    std::make_pair("GetCategoryValues", GetCategoryValues{}),
 };
 
 inline std::string usage() {
