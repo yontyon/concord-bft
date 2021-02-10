@@ -26,7 +26,11 @@ template <typename KVContainer, typename Encoder>
 inline std::string kvContainerToJson(const KVContainer &kv, const Encoder &enc) {
   auto out = std::string{"{\n"};
   for (const auto &[key, value] : kv) {
-    out += ("  \"" + enc(key) + "\": \"" + enc(value) + "\",\n");
+    if (value[0] == '[') {
+      out += ("  \"" + enc(key) + "\": " + enc(value) + ",\n");
+    } else {
+      out += ("  \"" + enc(key) + "\": \"" + enc(value) + "\",\n");
+    }
   }
   if (out.size() >= 2 && out[out.size() - 2] == ',') {
     out.erase(out.size() - 2, 1);

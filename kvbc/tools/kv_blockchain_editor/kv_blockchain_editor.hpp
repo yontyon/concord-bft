@@ -200,21 +200,25 @@ struct GetBlockInfo {
 
 struct GetBlockKeyValues {
   std::string description() const {
-    return "getBlockKeyValues BLOCK-ID CATEGORY_1 CATEGORY_2 ... CATEGORY_N\n"
+    return "getBlockKeyValues BLOCK-ID\n"
            "  Returns the block's key-values.";
   }
 
   std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
-    if (args.values.size() < 2) {
-      throw std::invalid_argument{"Missing BLOCK-ID argument or Category-ID argument"};
+    if (args.values.empty()) {
+      throw std::invalid_argument{"Missing BLOCK-ID"};
+    }
+    std::list<std::string> categorizes;
+    auto raw_block = bc.getRawBlock(toBlockId(args.values.front()));
+    for (auto& [cat, _] : raw_block.value().data.updates.kv) {
+      categorizes.push_front(cat);
     }
     std::map<std::string, std::string> updates;
     auto block_updates = bc.getBlockUpdates(toBlockId(args.values.front()));
-    for (uint32_t i = 1; i < args.values.size(); i++) {
-      auto cat_id = args.values[i];
-      auto cat_updates = block_updates.value().categoryUpdates(cat_id).value().get();
+    for (auto& cat : categorizes) {
+      auto cat_updates = block_updates.value().categoryUpdates(cat).value().get();
       auto updates_map = std::visit(BlockVisitor(), cat_updates);
-      updates.emplace(cat_id, toJson(updates_map));
+      updates.emplace(cat, toJson(updates_map));
     }
     return toJson(updates);
   }
