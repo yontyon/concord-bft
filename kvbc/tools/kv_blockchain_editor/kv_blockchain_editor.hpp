@@ -248,14 +248,22 @@ struct GetValue {
     if (args.values.size() > 2) {
       requested_block_version = toBlockId(args.values[2]);
     }
-    const auto val = std::visit(ValueVisitor(), bc.get(cat_id, key, requested_block_version).value());
+    auto data = bc.get(cat_id, key, requested_block_version);
+    if (data.has_value()) {
+      const auto val = std::visit(ValueVisitor(), data.value());
+      return toJson(std::map<std::string, std::string>{
+          std::make_pair("blockVersion", std::to_string(std::get<0>(val))),
+          std::make_pair("value", concordUtils::bufferToHex(std::get<1>(val).data(), std::get<1>(val).size()))});
+    }
+    data = bc.getLatest(cat_id, key);
+    const auto val = std::visit(ValueVisitor(), data.value());
     return toJson(std::map<std::string, std::string>{
         std::make_pair("blockVersion", std::to_string(std::get<0>(val))),
         std::make_pair("value", concordUtils::bufferToHex(std::get<1>(val).data(), std::get<1>(val).size()))});
   }
 };
 
-struct GetCategoryValues {
+struct getCategoryValues {
   std::string description() const {
     return "GetCategoryValues CATEGORY-ID [BLOCK-VERSION]\n"
            "  Gets a value by category id and (optionally) a block version.\n"
@@ -284,6 +292,28 @@ struct GetCategoryValues {
   }
 };
 
+struct getValueLatestVersion {
+  std::string description() const {
+    return "GetCategoryValues CATEGORY-ID\n"
+           "  Gets a value's version by HEX-KEY and category.\n";
+  }
+
+  std::string execute(const concord::kvbc::categorization::KeyValueBlockchain& bc, const CommandArguments& args) const {
+    if (args.values.size() < 2) {
+      throw std::invalid_argument{"Missing HEX-KEY argument or CATEGORY-ID argument"};
+    }
+    const auto key = concordUtils::hexToString(args.values.front());
+    const auto cat_id = args.values[1];
+    auto requested_block_version = bc.getLastReachableBlockId();
+    if (args.values.size() > 2) {
+      requested_block_version = toBlockId(args.values[2]);
+    }
+    auto data = bc.getLatestVersion(cat_id, key).value();
+    return toJson(std::map<std::string, std::string>{std::make_pair("blockVersion", std::to_string(data.version)),
+                                                     std::make_pair("deleted", data.deleted ? "true" : "false")});
+  }
+};
+
 using Command = std::variant<GetGenesisBlockID,
                              GetLastBlockID,
                              GetRawBlock,
@@ -291,7 +321,8 @@ using Command = std::variant<GetGenesisBlockID,
                              GetBlockInfo,
                              GetBlockKeyValues,
                              GetValue,
-                             GetCategoryValues>;
+                             getCategoryValues,
+                             getValueLatestVersion>;
 inline const auto commands_map = std::map<std::string, Command>{
     std::make_pair("getGenesisBlockID", GetGenesisBlockID{}),
     std::make_pair("getLastBlockID", GetLastBlockID{}),
@@ -300,7 +331,8 @@ inline const auto commands_map = std::map<std::string, Command>{
     std::make_pair("getBlockInfo", GetBlockInfo{}),
     std::make_pair("getBlockKeyValues", GetBlockKeyValues{}),
     std::make_pair("getValue", GetValue{}),
-    std::make_pair("GetCategoryValues", GetCategoryValues{}),
+    std::make_pair("getCategoryValues", getCategoryValues{}),
+    std::make_pair("getValueLatestVersion", getValueLatestVersion{}),
 };
 
 inline std::string usage() {
