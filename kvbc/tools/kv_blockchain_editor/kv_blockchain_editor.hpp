@@ -218,7 +218,12 @@ struct GetBlockKeyValues {
     for (auto& cat : categorizes) {
       auto cat_updates = block_updates.value().categoryUpdates(cat).value().get();
       auto updates_map = std::visit(BlockVisitor(), cat_updates);
-      updates.emplace(cat, toJson(updates_map));
+      std::map<std::string, std::string> hex_map;
+      for (auto& [key, val] : updates_map) {
+        hex_map.emplace(concordUtils::bufferToHex(key.data(), key.size()),
+                        concordUtils::bufferToHex(val.data(), val.size()));
+      }
+      updates.emplace(cat, toJson(hex_map));
     }
     return toJson(updates);
   }
@@ -244,8 +249,9 @@ struct GetValue {
       requested_block_version = toBlockId(args.values[2]);
     }
     const auto val = std::visit(ValueVisitor(), bc.get(cat_id, key, requested_block_version).value());
-    return toJson(std::map<std::string, std::string>{std::make_pair("blockVersion", std::to_string(std::get<0>(val))),
-                                                     std::make_pair("value", std::get<1>(val))});
+    return toJson(std::map<std::string, std::string>{
+        std::make_pair("blockVersion", std::to_string(std::get<0>(val))),
+        std::make_pair("value", concordUtils::bufferToHex(std::get<1>(val).data(), std::get<1>(val).size()))});
   }
 };
 
