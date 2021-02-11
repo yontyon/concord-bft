@@ -275,7 +275,12 @@ struct GetCategoryValues {
     }
     const auto updates = bc.getBlockUpdates(requested_block_version).value().categoryUpdates(cat_id).value().get();
     auto updates_map = std::visit(BlockVisitor(), updates);
-    return toJson(updates_map);
+    std::map<std::string, std::string> hex_map;
+    for (auto& [key, val] : updates_map) {
+      hex_map.emplace(concordUtils::bufferToHex(key.data(), key.size()),
+                      concordUtils::bufferToHex(val.data(), val.size()));
+    }
+    return toJson(hex_map);
   }
 };
 
