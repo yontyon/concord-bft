@@ -254,6 +254,7 @@ bool PreProcessor::checkClientBatchMsgCorrectness(const ClientBatchRequestMsgUni
 }
 
 void PreProcessor::updateAggregatorAndDumpMetrics() {
+  pre_execution_times_.clear();
   metricsComponent_.UpdateAggregator();
   auto currTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch());
   if (currTime - metricsLastDumpTime_ >= metricsDumpIntervalInSec_) {
@@ -442,7 +443,6 @@ void PreProcessor::onMessage<PreProcessRequestMsg>(PreProcessRequestMsg *msg) {
     registerSucceeded = registerRequest(ClientPreProcessReqMsgUniquePtr(), preProcessReqMsg, reqOffsetInBatch);
   }
   if (registerSucceeded) {
-    pre_execution_times_.start(preProcessReqMsg->getCid());
     preProcessorMetrics_.preProcInFlyRequestsNum.Get().Inc();  // Increase the metric on non-primary replica
     // Pre-process the request, calculate a hash of the result and send a reply back
     launchAsyncReqPreProcessingJob(preProcessReqMsg, false, false);
@@ -947,7 +947,6 @@ void AsyncPreProcessJob::execute() {
   MDC_PUT(MDC_REPLICA_ID_KEY, std::to_string(preProcessor_.myReplicaId_));
   MDC_PUT(MDC_THREAD_KEY, "async-preprocess");
   preProcessor_.handleReqPreProcessingJob(preProcessReqMsg_, isPrimary_, isRetry_);
-  if (!isPrimary_) preProcessor_.pre_execution_times_.end(preProcessReqMsg_->getCid());
 }
 
 void AsyncPreProcessJob::release() { delete this; }
