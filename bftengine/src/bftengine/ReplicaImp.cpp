@@ -4099,6 +4099,7 @@ void ReplicaImp::executeRequestsAndSendResponses(PrePrepareMsg *ppMsg,
       singleRequest.clear();
     }
   }
+  TimeRecorder send_reply_timer(*histograms_.sendRepliesToClientsDuration);
   for (auto &req : accumulatedRequests) {
     ConcordAssertGT(req.outActualReplySize,
                     0);  // TODO(GG): TBD - how do we want to support empty replies? (actualReplyLength==0)

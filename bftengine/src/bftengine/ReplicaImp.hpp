@@ -487,6 +487,7 @@ class ReplicaImp : public InternalReplicaApi, public ReplicaForStateTransfer {
                                         executeReadOnlyRequest,
                                         executeWriteRequest,
                                         executeRequestsInPrePrepareMsg,
+                                        sendRepliesToClientsDuration,
                                         numRequestsInPrePrepareMsg,
                                         requestsQueueOfPrimarySize,
                                         onSeqNumIsStable,
@@ -501,6 +502,7 @@ class ReplicaImp : public InternalReplicaApi, public ReplicaForStateTransfer {
     DEFINE_SHARED_RECORDER(executeReadOnlyRequest, 1, MAX_VALUE_NANOSECONDS, 3, Unit::NANOSECONDS);
     DEFINE_SHARED_RECORDER(executeWriteRequest, 1, MAX_VALUE_NANOSECONDS, 3, Unit::NANOSECONDS);
     DEFINE_SHARED_RECORDER(executeRequestsInPrePrepareMsg, 1, MAX_VALUE_NANOSECONDS, 3, Unit::NANOSECONDS);
+    DEFINE_SHARED_RECORDER(sendRepliesToClientsDuration, 1, MAX_VALUE_NANOSECONDS, 3, Unit::NANOSECONDS);
     DEFINE_SHARED_RECORDER(numRequestsInPrePrepareMsg, 1, 2500, 3, Unit::COUNT);
     DEFINE_SHARED_RECORDER(requestsQueueOfPrimarySize,
                            1,
