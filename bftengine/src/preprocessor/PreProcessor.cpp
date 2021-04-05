@@ -100,7 +100,7 @@ PreProcessor::PreProcessor(shared_ptr<MsgsCommunicator> &msgsCommunicator,
                            metricsComponent_.RegisterGauge("PreProcInFlyRequestsNum", 0)},
       preExecReqStatusCheckPeriodMilli_(myReplica_.getReplicaConfig().preExecReqStatusCheckTimerMillisec),
       timers_{timers},
-      recorder_{histograms_.totalPreExecutionDuration},
+      pre_execution_times_{histograms_.totalPreExecutionDuration},
       lastViewNum_(myReplica.getCurrentView()),
       pm_{pm} {
   registerMsgHandlers();
@@ -442,6 +442,7 @@ void PreProcessor::onMessage<PreProcessRequestMsg>(PreProcessRequestMsg *msg) {
     registerSucceeded = registerRequest(ClientPreProcessReqMsgUniquePtr(), preProcessReqMsg, reqOffsetInBatch);
   }
   if (registerSucceeded) {
+    pre_execution_times_.start(preProcessReqMsg->getCid());
     preProcessorMetrics_.preProcInFlyRequestsNum.Get().Inc();  // Increase the metric on non-primary replica
     // Pre-process the request, calculate a hash of the result and send a reply back
     launchAsyncReqPreProcessingJob(preProcessReqMsg, false, false);
@@ -591,6 +592,10 @@ void PreProcessor::finalizePreProcessing(NodeIdType clientId, uint16_t reqOffset
                                                        reqProcessingStatePtr->getPrimaryPreProcessedResult(),
                                                        reqProcessingStatePtr->getReqTimeoutMilli(),
                                                        cid);
+      // Here we stop the metric that take the time for e2e pre execution. Note that even in case where we switch
+      // primary and the current primary has already removed the request record from the recorder it is still fine as
+      // erase never throws an exception
+      pre_execution_times_.end(cid);
       LOG_DEBUG(logger(),
                 "Pass pre-processed request to the replica" << KVLOG(cid, reqSeqNum, clientId, reqOffsetInBatch));
       incomingMsgsStorage_->pushExternalMsg(move(clientRequestMsg));
@@ -708,16 +713,16 @@ bool PreProcessor::registerRequestOnPrimaryReplica(ClientPreProcessReqMsgUniqueP
 
 // Primary replica: start client request handling
 void PreProcessor::handleClientPreProcessRequestByPrimary(PreProcessRequestMsgSharedPtr preProcessRequestMsg) {
+  pre_execution_times_.start(preProcessRequestMsg->getCid());
   const auto &reqSeqNum = preProcessRequestMsg->reqSeqNum();
   const auto &clientId = preProcessRequestMsg->clientId();
   const auto &senderId = preProcessRequestMsg->senderId();
-  auto time_recorder = TimeRecorder(*recorder_.get());
   LOG_INFO(logger(),
            "Start request processing by a primary replica"
                << KVLOG(reqSeqNum, preProcessRequestMsg->getCid(), clientId, senderId));
   sendPreProcessRequestToAllReplicas(preProcessRequestMsg);
   // Pre-process the request and calculate a hash of the result
-  launchAsyncReqPreProcessingJob(preProcessRequestMsg, true, false, std::move(time_recorder));
+  launchAsyncReqPreProcessingJob(preProcessRequestMsg, true, false);
 }
 
 // Non-primary replica: start client request handling
@@ -794,10 +799,9 @@ void PreProcessor::setPreprocessingRightNow(uint16_t clientId, uint16_t reqOffse
 
 void PreProcessor::launchAsyncReqPreProcessingJob(const PreProcessRequestMsgSharedPtr &preProcessReqMsg,
                                                   bool isPrimary,
-                                                  bool isRetry,
-                                                  TimeRecorder &&time_recorder) {
+                                                  bool isRetry) {
   setPreprocessingRightNow(preProcessReqMsg->clientId(), preProcessReqMsg->reqOffsetInBatch(), true);
-  auto *preProcessJob = new AsyncPreProcessJob(*this, preProcessReqMsg, isPrimary, isRetry, std::move(time_recorder));
+  auto *preProcessJob = new AsyncPreProcessJob(*this, preProcessReqMsg, isPrimary, isRetry);
   threadPool_.add(preProcessJob);
 }
 
@@ -936,18 +940,14 @@ void PreProcessor::handleReqPreProcessingJob(const PreProcessRequestMsgSharedPtr
 AsyncPreProcessJob::AsyncPreProcessJob(PreProcessor &preProcessor,
                                        const PreProcessRequestMsgSharedPtr &preProcessReqMsg,
                                        bool isPrimary,
-                                       bool isRetry,
-                                       TimeRecorder &&time_recorder)
-    : preProcessor_(preProcessor),
-      preProcessReqMsg_(preProcessReqMsg),
-      isPrimary_(isPrimary),
-      isRetry_(isRetry),
-      time_recorder_(std::move(time_recorder)) {}
+                                       bool isRetry)
+    : preProcessor_(preProcessor), preProcessReqMsg_(preProcessReqMsg), isPrimary_(isPrimary), isRetry_(isRetry) {}
 
 void AsyncPreProcessJob::execute() {
   MDC_PUT(MDC_REPLICA_ID_KEY, std::to_string(preProcessor_.myReplicaId_));
   MDC_PUT(MDC_THREAD_KEY, "async-preprocess");
   preProcessor_.handleReqPreProcessingJob(preProcessReqMsg_, isPrimary_, isRetry_);
+  if (!isPrimary_) preProcessor_.pre_execution_times_.end(preProcessReqMsg_->getCid());
 }
 
 void AsyncPreProcessJob::release() { delete this; }

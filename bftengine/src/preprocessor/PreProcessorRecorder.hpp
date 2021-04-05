@@ -50,5 +50,4 @@ class PreProcessorRecorder {
   DEFINE_SHARED_RECORDER(convertAndCompareHashes, 1, MAX_VALUE_MICROSECONDS, 3, Unit::MICROSECONDS);
   DEFINE_SHARED_RECORDER(totalPreExecutionDuration, 1, MAX_VALUE_MICROSECONDS, 3, Unit::MICROSECONDS);
 };
-
 }  // namespace preprocessor

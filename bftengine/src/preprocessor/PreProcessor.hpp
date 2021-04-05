@@ -123,8 +123,7 @@ class PreProcessor {
   const uint16_t getOngoingReqIndex(uint16_t clientId, uint16_t reqOffsetInBatch) const;
   void launchAsyncReqPreProcessingJob(const PreProcessRequestMsgSharedPtr &preProcessReqMsg,
                                       bool isPrimary,
-                                      bool isRetry,
-                                      TimeRecorder &&time_recorder = TimeRecorder());
+                                      bool isRetry);
   uint32_t launchReqPreProcessing(uint16_t clientId,
                                   uint16_t reqOffsetInBatch,
                                   const std::string &cid,
@@ -206,7 +205,7 @@ class PreProcessor {
   const uint64_t preExecReqStatusCheckPeriodMilli_;
   concordUtil::Timers &timers_;
   PreProcessorRecorder histograms_;
-  std::shared_ptr<concord::diagnostics::Recorder> recorder_;
+  concord::diagnostics::AsyncTimeRecorderMap<std::string, true> pre_execution_times_;
   ViewNum lastViewNum_;
   std::shared_ptr<concord::performance::PerformanceManager> pm_ = nullptr;
 };
@@ -220,8 +219,7 @@ class AsyncPreProcessJob : public util::SimpleThreadPool::Job {
   AsyncPreProcessJob(PreProcessor &preProcessor,
                      const PreProcessRequestMsgSharedPtr &preProcessReqMsg,
                      bool isPrimary,
-                     bool isRetry,
-                     TimeRecorder &&time_recorder);
+                     bool isRetry);
   virtual ~AsyncPreProcessJob() = default;
 
   void execute() override;
