@@ -46,6 +46,25 @@ def start_replica_cmd(builddir, replica_id):
             "-b", "2",
             "-q", "1"]
 
+def start_replica_cmd_with_key_exchange(builddir, replica_id):
+    """
+    Return a command that starts an skvbc replica when passed to
+    subprocess.Popen.
+
+    Note each arguments is an element in a list.
+    """
+    statusTimerMilli = "500"
+    viewChangeTimeoutMilli = "10000"
+    path = os.path.join(builddir, "tests", "simpleKVBC", "TesterReplica", "skvbc_replica")
+    return [path,
+            "-k", KEY_FILE_PREFIX,
+            "-i", str(replica_id),
+            "-s", statusTimerMilli,
+            "-v", viewChangeTimeoutMilli,
+            "-e", str(True),
+            "-l", os.path.join(builddir, "tests", "simpleKVBC", "scripts", "logging.properties"),
+            "-b", "2",
+            "-q", "1"]
 
 class SkvbcReconfigurationTest(unittest.TestCase):
 
@@ -105,7 +124,7 @@ class SkvbcReconfigurationTest(unittest.TestCase):
         return reconf_msg
 
     @with_trio
-    @with_bft_network(start_replica_cmd, selected_configs=lambda n, f, c: n == 7)
+    @with_bft_network(start_replica_cmd_with_key_exchange, selected_configs=lambda n, f, c: n == 7, rotate_keys=True)
     async def test_key_exchange_command(self, bft_network):
         bft_network.start_all_replicas()
         client = bft_network.random_client()
@@ -114,6 +133,53 @@ class SkvbcReconfigurationTest(unittest.TestCase):
         client.config._replace(req_timeout_milli=10000)
         reconf_msg = self._construct_reconfiguration_keMsg_coammand()
         await client.write(reconf_msg.serialize(), reconfiguration=True)
+        for i in range(300):
+            await skvbc.write_known_kv()
+        for r in bft_network.all_replicas():
+            public_key_rotated = await bft_network.get_metric(r, bft_network, "Counters", "publicKeyRotated", component="KeyManager")
+            assert public_key_rotated == 7
+
+    @with_trio
+    @with_bft_network(start_replica_cmd_with_key_exchange, selected_configs=lambda n, f, c: n == 7, rotate_keys=True)
+    async def test_twice_key_exchange_command(self, bft_network):
+        bft_network.start_all_replicas()
+        client = bft_network.random_client()
+        skvbc = kvbc.SimpleKVBCProtocol(bft_network)
+        # We increase the default request timeout because we need to have around 300 consensuses which occasionally may take more than 5 seconds
+        client.config._replace(req_timeout_milli=10000)
+        reconf_msg = self._construct_reconfiguration_keMsg_coammand()
+        await client.write(reconf_msg.serialize(), reconfiguration=True)
+        for i in range(300):
+            await skvbc.write_known_kv()
+        for r in bft_network.all_replicas():
+            public_key_rotated = await bft_network.get_metric(r, bft_network, "Counters", "publicKeyRotated", component="KeyManager")
+            assert public_key_rotated == bft_network.config.n
+
+        await client.write(reconf_msg.serialize(), reconfiguration=True)
+        for i in range(300):
+            await skvbc.write_known_kv()
+        for r in bft_network.all_replicas():
+            public_key_rotated = await bft_network.get_metric(r, bft_network, "Counters", "publicKeyRotated", component="KeyManager")
+            assert public_key_rotated == 2 * bft_network.config.n
+
+    # @with_trio
+    # @with_bft_network(start_replica_cmd_with_key_exchange, selected_configs=lambda n, f, c: n == 7, rotate_keys=True)
+    # async def test_key_exchange_command_with_f_crashed_replica(self, bft_network):
+    #     bft_network.start_all_replicas()
+    #     client = bft_network.random_client()
+    #     skvbc = kvbc.SimpleKVBCProtocol(bft_network)
+    #     # Stop f non primary replicas
+    #     stopped_replicas = bft_network.random_set_of_replicas(bft_network.config.f, without={0})
+    #     bft_network.stop_replicas(stopped_replicas)
+    #     # We increase the default request timeout because we need to have around 300 consensuses which occasionally may take more than 5 seconds
+    #     client.config._replace(req_timeout_milli=10000)
+    #     reconf_msg = self._construct_reconfiguration_keMsg_coammand()
+    #     await client.write(reconf_msg.serialize(), reconfiguration=True)
+    #     for i in range(300):
+    #         await skvbc.write_known_kv()
+    #     for r in bft_network.all_replicas():
+    #         public_key_rotated = await bft_network.get_metric(r, bft_network, "Counters", "publicKeyRotated", component="KeyManager")
+    #         assert public_key_rotated == bft_network.config.n - bft_network.config.f
 
     @with_trio
     @with_bft_network(start_replica_cmd, selected_configs=lambda n, f, c: n == 7)

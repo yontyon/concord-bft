@@ -154,7 +154,7 @@ class KeyManager {
   KeysView keysView_;
   bool keyExchangeOnStart_{};
 
-  void onInitialKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn);
+  void handleKeyExchangeMsg(KeyExchangeMsg& kemsg, const uint64_t& sn);
   void notifyRegistry(bool save);
 
   // Samples periodically how many connections the replica has with other replicas.

@@ -14,6 +14,7 @@
 #include "bftengine/ControlStateManager.hpp"
 #include "Replica.hpp"
 #include "kvstream.h"
+#include "KeyManager.h"
 
 using namespace concord::messages;
 namespace concord::reconfiguration {
@@ -92,6 +93,7 @@ bool ReconfigurationHandler::handle(const KeyExchangeCommand& command,
                                     ReconfigurationErrorMsg&,
                                     uint64_t sequence_number) {
   LOG_INFO(GL, "KeyExchangeCommand has been executed");
+  bftEngine::impl::KeyManager::instance().sendKeyExchange();
   return true;
 }
 }  // namespace concord::reconfiguration

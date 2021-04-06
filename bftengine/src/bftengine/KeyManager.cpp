@@ -83,7 +83,7 @@ std::string KeyManager::onKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn)
   }
   LOG_INFO(KEY_EX_LOG, "Recieved onKeyExchange " << kemsg.toString() << " seq num " << sn);
   if (!keysExchanged) {
-    onInitialKeyExchange(kemsg, sn);
+    handleKeyExchangeMsg(kemsg, sn);
     return "ok";
   }
 
@@ -99,7 +99,7 @@ std::string KeyManager::onKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn)
 }
 
 // Once the set contains all replicas the crypto system is being updated and the gate is open.
-void KeyManager::onInitialKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn) {
+void KeyManager::handleKeyExchangeMsg(KeyExchangeMsg& kemsg, const uint64_t& sn) {
   SCOPED_MDC_SEQ_NUM(std::to_string(sn));
   // For some reason we recieved a key for a replica that already exchanged it's key.
   if (keyStore_.exchangedReplicas.find(kemsg.repID) != keyStore_.exchangedReplicas.end()) {
@@ -116,18 +116,23 @@ void KeyManager::onInitialKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn)
   metrics_->keyExchangedOnStartCounter.Get().Inc();
   LOG_INFO(KEY_EX_LOG, "Exchanged [" << keyStore_.exchangedReplicas.size() << "] out of [" << clusterSize_ << "]");
 
-  if (keyStore_.exchangedReplicas.size() < clusterSize_) {
-    keyStore_.push(kemsg, sn);
-    return;
-  }
-  // All keys were exchanged
-  LOG_INFO(KEY_EX_LOG, "building crypto system ");
-  keysView_.rotate(keysView_.keys().privateKey, keysView_.keys().outstandingPrivateKey);
   keyStore_.push(kemsg, sn);
-  notifyRegistry(true);
-  keysView_.backup();
-  keysExchanged = true;
-  LOG_INFO(KEY_EX_LOG, "All replicas exchanged keys, can start accepting msgs");
+
+  // If we are on the very first key exchange procedure
+  if (!keysExchanged) {
+    if (keyStore_.exchangedReplicas.size() < clusterSize_) {
+      return;
+    }
+    // All keys were exchanged
+    LOG_INFO(KEY_EX_LOG, "building crypto system ");
+    keysView_.rotate(keysView_.keys().privateKey, keysView_.keys().outstandingPrivateKey);
+    notifyRegistry(true);
+    keysView_.backup();
+    keysExchanged = true;
+    LOG_INFO(KEY_EX_LOG, "All replicas exchanged keys, can start accepting msgs");
+    // Now, lets clear the keyStore_ data such that we will be able to receive more key exchange messages
+    keyStore_.exchangedReplicas.clear();
+  }
 }
 
 void KeyManager::notifyRegistry(bool save) {
@@ -174,6 +179,7 @@ void KeyManager::onCheckpoint(const int& num) {
 
   for (auto id : rotatedReplicas) {
     metrics_->publicKeyRotated.Get().Inc();
+    keyStore_.exchangedReplicas.erase(id);
     if (id != repID_) continue;
     LOG_INFO(KEY_EX_LOG, "Rotating private key");
     keysView_.rotate(keysView_.keys().privateKey, keysView_.keys().outstandingPrivateKey);
