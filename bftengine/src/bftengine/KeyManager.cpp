@@ -42,6 +42,7 @@ KeyManager::KeyManager(InitData* id)
     LOG_INFO(KEY_EX_LOG, "building crypto system ");
     notifyRegistry(false);
     keysExchanged = true;
+    keyStore_.exchangedReplicas.clear();
     LOG_INFO(KEY_EX_LOG, "All replicas keys loaded from reserved pages, can start accepting msgs");
   }
 }
@@ -82,19 +83,7 @@ std::string KeyManager::onKeyExchange(KeyExchangeMsg& kemsg, const uint64_t& sn)
     return std::string(KeyExchangeMsg::hasKeysTrueReply);
   }
   LOG_INFO(KEY_EX_LOG, "Recieved onKeyExchange " << kemsg.toString() << " seq num " << sn);
-  if (!keysExchanged) {
-    handleKeyExchangeMsg(kemsg, sn);
-    return "ok";
-  }
-
-  if (!keyStore_.push(kemsg, sn)) return "ok";
-
-  metrics_->keyExchangedCounter.Get().Inc();
-
-  if (kemsg.repID == repID_) {
-    keysView_.rotate(keysView_.keys().outstandingPrivateKey, keysView_.keys().generatedPrivateKey);
-  }
-
+  handleKeyExchangeMsg(kemsg, sn);
   return "ok";
 }
 
@@ -104,7 +93,6 @@ void KeyManager::handleKeyExchangeMsg(KeyExchangeMsg& kemsg, const uint64_t& sn)
   // For some reason we recieved a key for a replica that already exchanged it's key.
   if (keyStore_.exchangedReplicas.find(kemsg.repID) != keyStore_.exchangedReplicas.end()) {
     LOG_DEBUG(KEY_EX_LOG, "Replica [" << kemsg.repID << "] already exchanged initial key");
-    ConcordAssert(false);
   }
 
   if (kemsg.repID == repID_) {
